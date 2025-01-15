@@ -1,0 +1,54 @@
+theory DiffieHellman
+begin
+
+builtins: hashing, asymmetric-encryption, diffie-hellman
+
+// functions: h/1, aenc/2, adec/2, pk/1
+// equations:
+//   adec(aenc(m, pk(k)), k) = m
+
+functions: to_pub_key/1, to_sess_key/2
+
+// TODO: Figure out why this is causing an infinite loop in maude on startup
+// equations:
+//   to_sess_key(priv_key, to_pub_key(priv_key_0)) =
+//   to_sess_key(priv_key_0, to_pub_key(priv_key))
+
+rule Gen_priv_pub_keys :
+  [Fr(~priv_key)]
+  -->
+  [!Priv($A, ~priv_key), !Pub($A, to_pub_key(~priv_key))]
+
+rule Send_pub_key :
+  [!Pub(A, pub_key)]
+  -->
+  [Out(pub_key)]
+
+rule Reveal_priv_key :
+  [!Priv(A, priv_key)]
+  --[RevealPrivKey(A)]->
+  [Out(priv_key)]
+
+rule Gen_sess_key :
+  let
+    sess_key_alice = to_sess_key(~alice_priv_key, to_pub_key(~bob_priv_key))
+    // sess_key_bob = to_sess_key(~bob_priv_key, to_pub_key(~alice_priv_key))
+  in
+  [In(to_pub_key(~alice_priv_key)), In(to_pub_key(~bob_priv_key)),
+    !Priv(A, ~alice_priv_key), !Priv($B, ~bob_priv_key)]
+  --[SessKeyCreated(A, $B, sess_key_alice)]->
+  [SessKey(A, $B, sess_key_alice)]
+
+rule Reveal_sess_key :
+  [SessKey(A, B, sess_key)]
+  --[RevealSessKey(A, B, sess_key)]->
+  [Out(sess_key)]
+
+lemma Client_session_key_honest_setup:
+  exists-trace
+  "Ex A B sess_key #i.
+      SessKeyCreated(A, B, sess_key) @ #i
+      & not(Ex #r. RevealPrivKey(A) @ r)
+      & not(Ex #r. RevealPrivKey(B) @ r)"
+
+end
