@@ -7,12 +7,19 @@ builtins: hashing, asymmetric-encryption, diffie-hellman
 // equations:
 //   adec(aenc(m, pk(k)), k) = m
 
-functions: to_pub_key/1, to_sess_key/2
+// functions: to_pub_key/1, to_sess_key/2
+// equations:
+//   to_pub_key(priv_key) = g ^ priv_key,
+//   to_sess_key(priv_key_A, pub_key_B) = pub_key_B ^ priv_key_A
 
-predicates:
-  BackgroundTheory() <=> (
-    (All x y #i. Eq(x, y) @ #i ==> x = y)
-  )
+// macros:
+//   to_pub_key(priv_key) = 'g' ^ priv_key,
+//   to_sess_key(priv_key_A, pub_key_B) = pub_key_B ^ priv_key_A
+
+// predicates:
+//   BackgroundTheory() <=> (
+//     (All x y #i. Eq(x, y) @ #i ==> x = y)
+//   )
 
 // TODO: Figure out why this is causing an infinite loop in maude on startup
 // equations:
@@ -22,7 +29,7 @@ predicates:
 rule Gen_priv_pub_keys :
   [Fr(~priv_key)]
   -->
-  [!Priv($A, ~priv_key), !Pub($A, to_pub_key(~priv_key))]
+  [!Priv($A, ~priv_key), !Pub($A, 'g'^~priv_key)]
 
 rule Send_pub_key :
   [!Pub(A, pub_key)]
@@ -36,15 +43,28 @@ rule Reveal_priv_key :
 
 rule Gen_sess_key :
   let
-    sess_key_alice = to_sess_key(alice_priv_key, to_pub_key(bob_priv_key))
-    sess_key_bob = to_sess_key(bob_priv_key, to_pub_key(alice_priv_key))
+    sess_key_alice = ('g'^bob_priv_key)^alice_priv_key
+    sess_key_bob = ('g'^alice_priv_key)^bob_priv_key
   in
-  [In(to_pub_key(alice_priv_key)), In(to_pub_key(bob_priv_key)),
+  [In('g'^alice_priv_key), In('g'^bob_priv_key),
     !Priv(A, alice_priv_key), !Priv(B, bob_priv_key)]
-  --[SessKeyCreated(A, B, sess_key_alice),
-      _restrict(not A = B),
-      Eq(sess_key_alice, sess_key_bob)]->
+  --[SessKeyCreated(A, B, sess_key_alice), _restrict(not A = B)]->
   [SessKey(A, B, sess_key_alice)]
+
+// rule Gen_sess_key_start :
+//   let
+//     sess_key_alice = ('g'^bob_priv_key)^alice_priv_key
+//     sess_key_bob = ('g'^alice_priv_key)^bob_priv_key
+//   in
+//   [In('g'^alice_priv_key), In('g'^bob_priv_key),
+//     !Priv(A, alice_priv_key), !Priv(B, bob_priv_key)]
+//   --[SessKeyGenStarted(A, B, sess_key_alice), _restrict(not A = B)]->
+//   [SessKeyGenStarted(A, B, sess_key_alice)]
+
+// rule Gen_sess_key_end :
+//   [SessKeyGenStarted(A, B, sess_key_alice)]
+//   -->
+//   [SessKey(A, B, sess_key_alice)]
 
 rule Reveal_sess_key :
   [SessKey(A, B, sess_key)]
@@ -53,21 +73,19 @@ rule Reveal_sess_key :
 
 lemma Client_session_key_honest_setup :
   exists-trace
-  "BackgroundTheory() ==>
-    Ex A B sess_key #i.
-      SessKeyCreated(A, B, sess_key) @ #i &
-      not(Ex #r. RevealPrivKey(A) @ r) &
-      not(Ex #r. RevealPrivKey(B) @ r)"
-
-lemma Test :
-  all-traces
-  "All A B. (
-    BackgroundTheory() &
-    not A = B &
+  "Ex A B sess_key #i.
+    SessKeyCreated(A, B, sess_key) @ #i &
     not(Ex #r. RevealPrivKey(A) @ r) &
-    not(Ex #r. RevealPrivKey(B) @ r)
-  ) ==> (
-    Ex sess_key #i. SessKeyCreated(A, B, sess_key) @ #i
-  )"
+    not(Ex #r. RevealPrivKey(B) @ r)"
+
+// lemma Test :
+//   all-traces
+//   "All A B. (
+//     not A = B &
+//     not(Ex #r. RevealPrivKey(A) @ r) &
+//     not(Ex #r. RevealPrivKey(B) @ r)
+//   ) ==> (
+//     Ex sess_key #i. SessKeyCreated(A, B, sess_key) @ #i
+//   )"
 
 end

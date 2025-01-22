@@ -1,0 +1,38 @@
+theory Test
+begin
+
+builtins: hashing, asymmetric-encryption, diffie-hellman
+
+rule Send_Pk_over_network :
+  [ !Pk($A, key) ]
+  --[KeySent($A, key)]->
+  [ Out(key) ]
+
+rule Generate_key_pair:
+  [ Fr(~x) ]
+  --[KeyPairGend($A, pk(~x))]->
+  [ !Pk($A, pk(~x))
+  , !Ltk($A, ~x)
+  ]
+
+rule Generate_DH_key_pair:
+  [ Fr(~x) ]
+  --[DHKeyPairGend($A, 'asd'^~x)]->
+  [ !Pk($A,'asd'^~x)
+  , Out('asd'^~x)
+  , !Ltk($A,~x)
+  ]
+
+lemma Test :
+  exists-trace
+  "Ex A key #i #j.
+    i < j &
+    KeyPairGend(A, key) @ #i &
+    KeySent(A, key) @ #j"
+
+lemma Test_DH :
+  exists-trace
+  "Ex A key #i.
+    DHKeyPairGend(A, key) @ #i"
+
+end
