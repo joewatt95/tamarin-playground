@@ -29,27 +29,28 @@ builtins: hashing, asymmetric-encryption, diffie-hellman
 rule Gen_priv_pub_keys :
   [Fr(~priv_key)]
   -->
-  [!Priv($A, ~priv_key), !Pub($A, 'g'^~priv_key)]
+  [!PrivPubKeys($A, ~priv_key, 'g' ^ ~priv_key)]
 
 rule Send_pub_key :
-  [!Pub(A, pub_key)]
+  [!PrivPubKeys(A, priv_key, pub_key)]
   -->
   [Out(pub_key)]
 
 rule Reveal_priv_key :
-  [!Priv(A, priv_key)]
+  [!PrivPubKeys(A, priv_key, pub_key)]
   --[RevealPrivKey(A)]->
   [Out(priv_key)]
 
 rule Gen_sess_key :
   let
-    sess_key_alice = ('g'^bob_priv_key)^alice_priv_key
-    sess_key_bob = ('g'^alice_priv_key)^bob_priv_key
+    sess_key = pub_key_B ^ priv_key_A
+    // sess_key_B = pub_key_A ^ priv_key_B 
   in
-  [In('g'^alice_priv_key), In('g'^bob_priv_key),
-    !Priv(A, alice_priv_key), !Priv(B, bob_priv_key)]
-  --[SessKeyCreated(A, B, sess_key_alice), _restrict(not A = B)]->
-  [SessKey(A, B, sess_key_alice)]
+  [In(pub_key_A), In(pub_key_B),
+    !PrivPubKeys(A, priv_key_A, pub_key_A),
+    !PrivPubKeys(B, priv_key_B, pub_key_B)]
+  --[SessKeyCreated(A, B, sess_key), _restrict(not A = B)]->
+  [SessKey(A, B, sess_key)]
 
 // rule Gen_sess_key_start :
 //   let
