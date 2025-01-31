@@ -21,11 +21,6 @@ builtins: hashing, asymmetric-encryption, diffie-hellman
 //     (All x y #i. Eq(x, y) @ #i ==> x = y)
 //   )
 
-// TODO: Figure out why this is causing an infinite loop in maude on startup
-// equations:
-//   to_sess_key(priv_key, to_pub_key(priv_key_0)) =
-//   to_sess_key(priv_key_0, to_pub_key(priv_key))
-
 rule Gen_priv_pub_keys :
   [Fr(~priv_key)]
   -->
@@ -41,17 +36,6 @@ rule Reveal_priv_key :
   --[RevealPrivKey($A)]->
   [Out(~priv_key)]
 
-// rule Gen_sess_key :
-//   let
-//     sess_key = pub_key_B ^ priv_key_A
-//     // sess_key_B = pub_key_A ^ priv_key_B 
-//   in
-//   [In(pub_key_A), In(pub_key_B),
-//     !PrivPubKeys(A, priv_key_A, pub_key_A),
-//     !PrivPubKeys(B, priv_key_B, pub_key_B)]
-//   --[SessKeyCreated(A, priv_key_A, B, priv_key_B, sess_key), _restrict(not A = B)]->
-//   [SessKey(A, B, sess_key)]
-
 rule Gen_sess_key_init :
   [In(pub_key_A), In(pub_key_B),
     !PrivPubKeys($A, ~priv_key_A, pub_key_A),
@@ -59,10 +43,10 @@ rule Gen_sess_key_init :
   --[_restrict(not $A = $B), GenSessKeyInit($A, ~priv_key_A, $B, ~priv_key_B)]->
   [GenSessKeyInit($A, ~priv_key_A, $B, ~priv_key_B)]
 
-rule Gen_sess_key_honest :
+rule Gen_sess_key_ok :
   [GenSessKeyInit($A, ~priv_key_A, $B, ~priv_key_B),
     !PrivPubKeys($B, ~priv_key_B, pub_key_B)]
-  --[_restrict(not $A = $B), SessKeyHonest($A, ~priv_key_A, $B, ~priv_key_B)]->
+  --[_restrict(not $A = $B), GenSessKeyOk($A, ~priv_key_A, $B, ~priv_key_B)]->
   [SessKey($A, ~priv_key_A, $B, ~priv_key_B, pub_key_B ^ ~priv_key_A)]
 
 rule Gen_sess_key_mitm :
@@ -73,7 +57,7 @@ rule Gen_sess_key_mitm :
   [GenSessKeyInit($A, ~priv_key_A, $B, ~priv_key_B),
     In(pub_key_C), !PrivPubKeys($C, ~priv_key_C, pub_key_C)]
   --[_restrict(not ($A = $B) & not ($B = $C) & not ($A = $C)),
-      SessKeyMitm($A, ~priv_key_A, $B, ~priv_key_B, $C, ~priv_key_C)]->
+      GenSessKeyMitm($A, ~priv_key_A, $B, ~priv_key_B, $C, ~priv_key_C)]->
   [SessKey($A, ~priv_key_A, $C, ~priv_key_C, sess_key_AC),
     SessKey($B, ~priv_key_B, $C, ~priv_key_C, sess_key_BC)]
 
@@ -85,13 +69,13 @@ rule Reveal_sess_key :
 lemma Client_session_key_honest_setup :
   exists-trace
   "Ex A B priv_key_A priv_key_B #i.
-    SessKeyHonest(A, priv_key_A, B, priv_key_B) @ #i &
+    GenSessKeyOk(A, priv_key_A, B, priv_key_B) @ #i &
     not(Ex P #r. RevealPrivKey(P) @ r)"
 
 lemma Man_in_the_middle :
   exists-trace
   "Ex A B C priv_key_A priv_key_B priv_key_C #i .
-    SessKeyMitm(A, priv_key_A, B, priv_key_B, C, priv_key_C) @ #i &
+    GenSessKeyMitm(A, priv_key_A, B, priv_key_B, C, priv_key_C) @ #i &
     not(Ex P #r. RevealPrivKey(P) @ r)"
 
 // lemma Test :
