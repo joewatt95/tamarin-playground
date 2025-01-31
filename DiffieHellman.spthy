@@ -32,52 +32,67 @@ rule Gen_priv_pub_keys :
   [!PrivPubKeys($A, ~priv_key, 'g' ^ ~priv_key)]
 
 rule Send_pub_key :
-  [!PrivPubKeys(A, priv_key, pub_key)]
+  [!PrivPubKeys($A, ~priv_key, pub_key)]
   -->
   [Out(pub_key)]
 
 rule Reveal_priv_key :
-  [!PrivPubKeys(A, priv_key, pub_key)]
-  --[RevealPrivKey(A)]->
-  [Out(priv_key)]
+  [!PrivPubKeys($A, ~priv_key, $pub_key)]
+  --[RevealPrivKey($A)]->
+  [Out(~priv_key)]
 
-rule Gen_sess_key :
-  let
-    sess_key = pub_key_B ^ priv_key_A
-    // sess_key_B = pub_key_A ^ priv_key_B 
-  in
-  [In(pub_key_A), In(pub_key_B),
-    !PrivPubKeys(A, priv_key_A, pub_key_A),
-    !PrivPubKeys(B, priv_key_B, pub_key_B)]
-  --[SessKeyCreated(A, B, sess_key), _restrict(not A = B)]->
-  [SessKey(A, B, sess_key)]
-
-// rule Gen_sess_key_start :
+// rule Gen_sess_key :
 //   let
-//     sess_key_alice = ('g'^bob_priv_key)^alice_priv_key
-//     sess_key_bob = ('g'^alice_priv_key)^bob_priv_key
+//     sess_key = pub_key_B ^ priv_key_A
+//     // sess_key_B = pub_key_A ^ priv_key_B 
 //   in
-//   [In('g'^alice_priv_key), In('g'^bob_priv_key),
-//     !Priv(A, alice_priv_key), !Priv(B, bob_priv_key)]
-//   --[SessKeyGenStarted(A, B, sess_key_alice), _restrict(not A = B)]->
-//   [SessKeyGenStarted(A, B, sess_key_alice)]
+//   [In(pub_key_A), In(pub_key_B),
+//     !PrivPubKeys(A, priv_key_A, pub_key_A),
+//     !PrivPubKeys(B, priv_key_B, pub_key_B)]
+//   --[SessKeyCreated(A, priv_key_A, B, priv_key_B, sess_key), _restrict(not A = B)]->
+//   [SessKey(A, B, sess_key)]
 
-// rule Gen_sess_key_end :
-//   [SessKeyGenStarted(A, B, sess_key_alice)]
-//   -->
-//   [SessKey(A, B, sess_key_alice)]
+rule Gen_sess_key_init :
+  [In(pub_key_A), In(pub_key_B),
+    !PrivPubKeys($A, ~priv_key_A, pub_key_A),
+    !PrivPubKeys($B, ~priv_key_B, pub_key_B)]
+  --[_restrict(not $A = $B), GenSessKeyInit($A, ~priv_key_A, $B, ~priv_key_B)]->
+  [GenSessKeyInit($A, ~priv_key_A, $B, ~priv_key_B)]
+
+rule Gen_sess_key_honest :
+  [GenSessKeyInit($A, ~priv_key_A, $B, ~priv_key_B),
+    !PrivPubKeys($B, ~priv_key_B, pub_key_B)]
+  --[_restrict(not $A = $B), SessKeyHonest($A, ~priv_key_A, $B, ~priv_key_B)]->
+  [SessKey($A, ~priv_key_A, $B, ~priv_key_B, pub_key_B ^ ~priv_key_A)]
+
+rule Gen_sess_key_mitm :
+  let
+    sess_key_AC = pub_key_C ^ ~priv_key_A
+    sess_key_BC = pub_key_C ^ ~priv_key_B
+  in
+  [GenSessKeyInit($A, ~priv_key_A, $B, ~priv_key_B),
+    In(pub_key_C), !PrivPubKeys($C, ~priv_key_C, pub_key_C)]
+  --[_restrict(not ($A = $B) & not ($B = $C) & not ($A = $C)),
+      SessKeyMitm($A, ~priv_key_A, $B, ~priv_key_B, $C, ~priv_key_C)]->
+  [SessKey($A, ~priv_key_A, $C, ~priv_key_C, sess_key_AC),
+    SessKey($B, ~priv_key_B, $C, ~priv_key_C, sess_key_BC)]
 
 rule Reveal_sess_key :
-  [SessKey(A, B, sess_key)]
-  --[RevealSessKey(A, B, sess_key)]->
+  [SessKey($A, ~priv_key_A, $B, ~priv_key_B, sess_key)]
+  --[RevealSessKey($A, $B, sess_key)]->
   [Out(sess_key)]
 
 lemma Client_session_key_honest_setup :
   exists-trace
-  "Ex A B sess_key #i.
-    SessKeyCreated(A, B, sess_key) @ #i &
-    not(Ex #r. RevealPrivKey(A) @ r) &
-    not(Ex #r. RevealPrivKey(B) @ r)"
+  "Ex A B priv_key_A priv_key_B #i.
+    SessKeyHonest(A, priv_key_A, B, priv_key_B) @ #i &
+    not(Ex P #r. RevealPrivKey(P) @ r)"
+
+lemma Man_in_the_middle :
+  exists-trace
+  "Ex A B C priv_key_A priv_key_B priv_key_C #i .
+    SessKeyMitm(A, priv_key_A, B, priv_key_B, C, priv_key_C) @ #i &
+    not(Ex P #r. RevealPrivKey(P) @ r)"
 
 // lemma Test :
 //   all-traces
